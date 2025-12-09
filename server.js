@@ -54,8 +54,8 @@ const sendDiscordNotification = async (message, type = 'info') => {
 // PRICING TIERS
 // ============================================
 // Premium Tier - $5.99/month or $49/year
-const PREMIUM_MONTHLY_PRICE_ID = 'price_1SbkeCERUSwMWdL0tXQp4a3o';
-const PREMIUM_YEARLY_PRICE_ID = 'price_1SbXG6ERUSwMWdL0BI7DZrTz';
+const PREMIUM_MONTHLY_PRICE_ID = 'price_1ScYpECcNbRqQcCD8kFyAxAK';
+const PREMIUM_YEARLY_PRICE_ID = 'price_1ScYriCcNbRqQcCDj9zEqkKX';
 
 // Pro Tier - $14.99/month or $119/year (Coming Soon)
 const PRO_MONTHLY_PRICE_ID = 'price_1SbmimERUSwMWdL0sw9eckhF';
@@ -69,7 +69,7 @@ let proWaitlist = [];
 
 // CORS - Allow frontend URLs
 app.use(cors({
-  origin: ['http://localhost:3000', 'https://vidboost-frontend.vercel.app'],
+  origin: ['http://localhost:3000', 'https://vidboost-frontend.vercel.app', 'https://vidboost.app'],
   credentials: true
 }));
 app.use(express.json());
@@ -116,8 +116,8 @@ app.post('/api/create-checkout-session', async (req, res) => {
       payment_method_types: ['card'],
       line_items: [{ price: priceId, quantity: 1 }],
       mode: 'subscription',
-      success_url: 'https://vidboost-frontend.vercel.app?success=true',
-      cancel_url: 'https://vidboost-frontend.vercel.app?canceled=true',
+      success_url: 'https://vidboost.app?success=true',
+      cancel_url: 'https://vidboost.app?canceled=true',
       metadata: { userId: userId, tier: tier || 'premium' }
     });
     res.json({ url: session.url });
