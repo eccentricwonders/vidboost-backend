@@ -98,7 +98,7 @@ const sendDiscordNotification = async (message, type = 'info') => {
           description: message.description,
           color: colors[type] || colors.info,
           timestamp: new Date().toISOString(),
-          footer: { text: 'VidBoost Alerts' }
+          footer: { text: 'JSMGAX Alerts' }
         }]
       })
     });
@@ -127,7 +127,7 @@ let proWaitlist = [];
 
 // CORS - Allow frontend URLs
 app.use(cors({
-  origin: ['http://localhost:3000', 'https://vidboost-frontend.vercel.app', 'https://vidboost.app'],
+  origin: ['http://localhost:3000', 'https://jsmgax.vercel.app', 'https://jsmgax.com'],
   credentials: true
 }));
 app.use(express.json());
@@ -174,8 +174,8 @@ app.post('/api/create-checkout-session', authLimiter, async (req, res) => {
       payment_method_types: ['card'],
       line_items: [{ price: priceId, quantity: 1 }],
       mode: 'subscription',
-      success_url: 'https://vidboost.app?success=true',
-      cancel_url: 'https://vidboost.app?canceled=true',
+      success_url: 'https://jsmgax.com?success=true',
+      cancel_url: 'https://jsmgax.com?canceled=true',
       metadata: { userId: userId, tier: tier || 'premium' }
     });
     res.json({ url: session.url });
@@ -226,7 +226,7 @@ app.post('/api/notify-signup', async (req, res) => {
     const { email, name } = req.body;
     
     await sendDiscordNotification({
-      title: '🎉 New VidBoost Signup!',
+      title: '🎉 New JSMGAX Signup!',
       description: `**Email:** ${email}\n**Name:** ${name || 'Not provided'}`
     }, 'signup');
     
