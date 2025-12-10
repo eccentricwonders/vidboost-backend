@@ -19,7 +19,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 // ============================================
 // YOUTUBE DATA API
 // ============================================
-const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY || 'AIzaSyDzIDQ0yjqD7Wn2As-ZPsZhAxVhkSkYKiw';
+const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
 
 // ============================================
 // DISCORD NOTIFICATIONS
