@@ -17,6 +17,11 @@ const openai = new OpenAI({
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 // ============================================
+// YOUTUBE DATA API
+// ============================================
+const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY || 'AIzaSyDzIDQ0yjqD7Wn2As-ZPsZhAxVhkSkYKiw';
+
+// ============================================
 // DISCORD NOTIFICATIONS
 // ============================================
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
@@ -1017,6 +1022,95 @@ app.get('/api/stats', (req, res) => {
       : 0
   });
 });
+
+// ============================================
+// TRENDING VIDEOS ENDPOINT
+// ============================================
+
+// Cache for trending videos (refresh every 30 minutes)
+let trendingCache = {
+  data: null,
+  lastFetch: null
+};
+
+const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
+
+app.get('/api/trending', async (req, res) => {
+  try {
+    const { category } = req.query;
+    
+    // Check cache
+    const cacheKey = category || 'all';
+    if (trendingCache.data && 
+        trendingCache.data[cacheKey] && 
+        trendingCache.lastFetch && 
+        (Date.now() - trendingCache.lastFetch) < CACHE_DURATION) {
+      return res.json({ success: true, videos: trendingCache.data[cacheKey], cached: true });
+    }
+    
+    // Category IDs for YouTube
+    const categoryIds = {
+      'gaming': '20',
+      'music': '10',
+      'entertainment': '24',
+      'howto': '26',
+      'science': '28',
+      'sports': '17',
+      'news': '25',
+      'comedy': '23',
+      'education': '27',
+      'tech': '28'
+    };
+    
+    let apiUrl = `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&chart=mostPopular&regionCode=US&maxResults=12&key=${YOUTUBE_API_KEY}`;
+    
+    if (category && categoryIds[category]) {
+      apiUrl += `&videoCategoryId=${categoryIds[category]}`;
+    }
+    
+    const response = await fetch(apiUrl);
+    const data = await response.json();
+    
+    if (data.error) {
+      console.error('YouTube API error:', data.error);
+      return res.status(500).json({ success: false, error: data.error.message });
+    }
+    
+    // Format the videos
+    const videos = data.items.map(video => ({
+      id: video.id,
+      title: video.snippet.title,
+      thumbnail: video.snippet.thumbnails.high?.url || video.snippet.thumbnails.medium?.url,
+      channel: video.snippet.channelTitle,
+      views: formatViews(video.statistics.viewCount),
+      viewCount: parseInt(video.statistics.viewCount),
+      likes: video.statistics.likeCount,
+      publishedAt: video.snippet.publishedAt,
+      url: `https://www.youtube.com/watch?v=${video.id}`
+    }));
+    
+    // Update cache
+    if (!trendingCache.data) trendingCache.data = {};
+    trendingCache.data[cacheKey] = videos;
+    trendingCache.lastFetch = Date.now();
+    
+    res.json({ success: true, videos, cached: false });
+  } catch (error) {
+    console.error('Trending videos error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Helper function to format view counts
+function formatViews(views) {
+  const num = parseInt(views);
+  if (num >= 1000000) {
+    return (num / 1000000).toFixed(1) + 'M';
+  } else if (num >= 1000) {
+    return (num / 1000).toFixed(1) + 'K';
+  }
+  return num.toString();
+}
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
