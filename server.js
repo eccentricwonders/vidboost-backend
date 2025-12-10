@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const OpenAI = require('openai');
 const Stripe = require('stripe');
+const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 
 const app = express();
@@ -15,6 +16,58 @@ const openai = new OpenAI({
 });
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+
+// ============================================
+// RATE LIMITING
+// ============================================
+
+// General rate limit - 100 requests per 15 minutes per IP
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100,
+  message: { error: 'Too many requests, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Strict rate limit for expensive AI operations - 10 per 15 minutes per IP
+const aiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10,
+  message: { error: 'Too many analysis requests. Please wait a few minutes and try again.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Thumbnail generation - 5 per 15 minutes per IP
+const thumbnailLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5,
+  message: { error: 'Too many thumbnail requests. Please wait a few minutes and try again.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Script generation - 10 per 15 minutes per IP
+const scriptLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10,
+  message: { error: 'Too many script requests. Please wait a few minutes and try again.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Auth/payment endpoints - 20 per 15 minutes per IP
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20,
+  message: { error: 'Too many requests. Please wait a few minutes and try again.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Apply general rate limit to all requests
+app.use(generalLimiter);
 
 // ============================================
 // YOUTUBE DATA API
@@ -100,7 +153,7 @@ const upload = multer({ storage: storage });
 // STRIPE CHECKOUT
 // ============================================
 
-app.post('/api/create-checkout-session', async (req, res) => {
+app.post('/api/create-checkout-session', authLimiter, async (req, res) => {
   try {
     const { priceType, userId, tier } = req.body;
     
@@ -218,7 +271,7 @@ const THUMBNAIL_LIMITS = {
   pro: 20         // 20 per month
 };
 
-app.post('/api/generate-thumbnail', async (req, res) => {
+app.post('/api/generate-thumbnail', thumbnailLimiter, async (req, res) => {
   console.log('=== THUMBNAIL REQUEST RECEIVED ===');
   try {
     const { videoTitle, videoTopic, transcriptSummary, style } = req.body;
@@ -294,7 +347,7 @@ Requirements:
 // AI SCRIPT WRITER
 // ============================================
 
-app.post('/api/generate-script', async (req, res) => {
+app.post('/api/generate-script', scriptLimiter, async (req, res) => {
   console.log('=== SCRIPT GENERATION REQUEST ===');
   try {
     const { topic, length, style, targetAudience } = req.body;
@@ -743,7 +796,7 @@ async function generateQuickSummary(transcription) {
 // TRANSCRIPTION ENDPOINTS
 // ============================================
 
-app.post('/api/transcribe', upload.single('video'), async (req, res) => {
+app.post('/api/transcribe', aiLimiter, upload.single('video'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, error: 'No file uploaded' });
@@ -811,7 +864,7 @@ app.post('/api/transcribe', upload.single('video'), async (req, res) => {
   }
 });
 
-app.post('/api/transcribe-youtube', async (req, res) => {
+app.post('/api/transcribe-youtube', aiLimiter, async (req, res) => {
   try {
     const { url } = req.body;
     if (!url) {
@@ -926,7 +979,7 @@ app.post('/api/transcribe-youtube', async (req, res) => {
 // COMPETITOR ANALYSIS ENDPOINT
 // ============================================
 
-app.post('/api/analyze-competitor', async (req, res) => {
+app.post('/api/analyze-competitor', aiLimiter, async (req, res) => {
   try {
     const { url } = req.body;
     if (!url) {
