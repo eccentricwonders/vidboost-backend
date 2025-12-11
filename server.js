@@ -1165,6 +1165,109 @@ function formatViews(views) {
   return num.toString();
 }
 
+// ============================================
+// NICHE TREND DETECTOR ENDPOINT
+// ============================================
+
+app.post('/api/niche-trends', aiLimiter, async (req, res) => {
+  try {
+    const { niche } = req.body;
+    
+    if (!niche) {
+      return res.status(400).json({ success: false, error: 'Niche is required' });
+    }
+
+    // Generate personalized niche trend analysis using GPT-4
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { 
+          role: "system", 
+          content: "You are a YouTube trend analyst and content strategist who specializes in helping creators identify trending topics, video opportunities, and keyword strategies within specific niches. Provide actionable, data-driven insights."
+        },
+        { 
+          role: "user", 
+          content: `Analyze the current trends and opportunities for the "${niche}" niche on YouTube. Provide:
+
+1. TRENDING TOPICS (5-7 specific topics):
+- List the hottest trending topics in this niche RIGHT NOW
+- Include why each topic is trending
+- Rate each topic's potential: [🔥 HOT / ⚡ RISING / 💎 EVERGREEN]
+
+2. VIDEO IDEAS (5 specific ideas):
+- Give 5 concrete video ideas that would perform well in this niche
+- For each idea, include:
+  * Catchy title suggestion
+  * Why it would work
+  * Best format (tutorial, vlog, review, etc.)
+
+3. KEYWORD OPPORTUNITIES (8-10 keywords):
+- List high-potential keywords/search terms in this niche
+- Mark each as: [🟢 LOW COMPETITION / 🟡 MEDIUM / 🔴 HIGH]
+- Include estimated search volume indicator: [📊 HIGH / 📈 MEDIUM / 📉 LOW]
+
+4. COMPETITOR INSIGHTS:
+- What are top creators in this niche doing RIGHT NOW?
+- What content gaps exist (opportunities they're missing)?
+- What thumbnail/title patterns are working?
+- Recommended upload frequency for this niche
+
+Be specific, actionable, and current. Focus on what would work in ${new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}.`
+        }
+      ],
+      max_tokens: 1500,
+      temperature: 0.7
+    });
+
+    const fullAnalysis = response.choices[0].message.content;
+    
+    // Parse the response into sections
+    const sections = fullAnalysis.split(/\n(?=\d+\.\s)/);
+    
+    let trendingTopics = '';
+    let videoIdeas = '';
+    let keywords = '';
+    let competitorInsights = '';
+    
+    sections.forEach(section => {
+      if (section.includes('TRENDING TOPICS')) {
+        trendingTopics = section.replace(/^\d+\.\s*TRENDING TOPICS[^\n]*\n/, '').trim();
+      } else if (section.includes('VIDEO IDEAS')) {
+        videoIdeas = section.replace(/^\d+\.\s*VIDEO IDEAS[^\n]*\n/, '').trim();
+      } else if (section.includes('KEYWORD OPPORTUNITIES')) {
+        keywords = section.replace(/^\d+\.\s*KEYWORD OPPORTUNITIES[^\n]*\n/, '').trim();
+      } else if (section.includes('COMPETITOR INSIGHTS')) {
+        competitorInsights = section.replace(/^\d+\.\s*COMPETITOR INSIGHTS[^\n]*\n/, '').trim();
+      }
+    });
+    
+    // Fallback if parsing fails
+    if (!trendingTopics && !videoIdeas && !keywords && !competitorInsights) {
+      const parts = fullAnalysis.split('\n\n');
+      trendingTopics = parts[0] || fullAnalysis;
+      videoIdeas = parts[1] || 'Video ideas are being generated...';
+      keywords = parts[2] || 'Keywords are being generated...';
+      competitorInsights = parts[3] || 'Competitor insights are being generated...';
+    }
+
+    res.json({
+      success: true,
+      niche: niche,
+      trendingTopics: trendingTopics || 'Analyzing trending topics...',
+      videoIdeas: videoIdeas || 'Generating video ideas...',
+      keywords: keywords || 'Finding keyword opportunities...',
+      competitorInsights: competitorInsights || 'Analyzing competitors...'
+    });
+
+  } catch (error) {
+    console.error('Niche trends error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to analyze niche trends. Please try again.' 
+    });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
