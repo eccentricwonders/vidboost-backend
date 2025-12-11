@@ -1268,6 +1268,44 @@ Be specific, actionable, and current. Focus on what would work in ${new Date().t
   }
 });
 
+// ============================================
+// HARDSHIP REQUEST ENDPOINT
+// ============================================
+
+app.post('/api/hardship-request', async (req, res) => {
+  try {
+    const { userEmail, userName, usesLeft, reason, analysesRequested } = req.body;
+    
+    // Send email notification to admin
+    // For now, just log it and return success
+    // You can add email service later (like SendGrid, AWS SES, etc.)
+    
+    console.log('\n========== HARDSHIP REQUEST ==========');
+    console.log('User:', userName);
+    console.log('Email:', userEmail);
+    console.log('Current Uses Left:', usesLeft);
+    console.log('Analyses Requested:', analysesRequested);
+    console.log('Reason:', reason);
+    console.log('Timestamp:', new Date().toISOString());
+    console.log('======================================\n');
+    
+    // TODO: Send email to eccentricwonders@gmail.com
+    // For now, you'll see these in your Railway logs
+    
+    res.json({ 
+      success: true, 
+      message: 'Request submitted successfully' 
+    });
+    
+  } catch (error) {
+    console.error('Hardship request error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to submit request' 
+    });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
