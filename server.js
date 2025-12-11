@@ -127,7 +127,7 @@ let proWaitlist = [];
 
 // CORS - Allow frontend URLs
 app.use(cors({
-  origin: ['http://localhost:3000', 'https://jsmgax.vercel.app', 'https://jsmgax.com'],
+  origin: ['http://localhost:3000', 'https://jsmgax.vercel.app', 'https://jsmgax.com', 'https://www.jsmgax.com'],
   credentials: true
 }));
 app.use(express.json());
