@@ -1192,7 +1192,7 @@ app.post('/api/niche-trends', aiLimiter, async (req, res) => {
 1. TRENDING TOPICS (5-7 specific topics):
 - List the hottest trending topics in this niche RIGHT NOW
 - Include why each topic is trending
-- Rate each topic's potential: [🔥 HOT / ⚡ RISING / 💎 EVERGREEN]
+- Rate each topic's potential: [HOT / RISING / EVERGREEN]
 
 2. VIDEO IDEAS (5 specific ideas):
 - Give 5 concrete video ideas that would perform well in this niche
@@ -1203,8 +1203,8 @@ app.post('/api/niche-trends', aiLimiter, async (req, res) => {
 
 3. KEYWORD OPPORTUNITIES (8-10 keywords):
 - List high-potential keywords/search terms in this niche
-- Mark each as: [🟢 LOW COMPETITION / 🟡 MEDIUM / 🔴 HIGH]
-- Include estimated search volume indicator: [📊 HIGH / 📈 MEDIUM / 📉 LOW]
+- Mark each as: [LOW COMPETITION / MEDIUM / HIGH]
+- Include estimated search volume indicator: [HIGH VOLUME / MEDIUM VOLUME / LOW VOLUME]
 
 4. COMPETITOR INSIGHTS:
 - What are top creators in this niche doing RIGHT NOW?
@@ -1212,7 +1212,7 @@ app.post('/api/niche-trends', aiLimiter, async (req, res) => {
 - What thumbnail/title patterns are working?
 - Recommended upload frequency for this niche
 
-Be specific, actionable, and current. Focus on what would work in ${new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}.`
+Format your response with clear bullet points and line breaks. Be specific, actionable, and current. Focus on what would work in ${new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}.`
         }
       ],
       max_tokens: 1500,
