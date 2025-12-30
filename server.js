@@ -17,6 +17,209 @@ const openai = new OpenAI({
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
+// Clerk Backend API for updating user metadata
+const CLERK_SECRET_KEY = process.env.CLERK_SECRET_KEY;
+
+// ============================================
+// STRIPE WEBHOOK - Must be before express.json()
+// ============================================
+
+// This needs raw body for signature verification
+app.post('/api/stripe-webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  
+  let event;
+  
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+    console.log('✅ Webhook verified:', event.type);
+  } catch (err) {
+    console.error('❌ Webhook signature verification failed:', err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+  
+  // Handle the event
+  switch (event.type) {
+    case 'checkout.session.completed': {
+      const session = event.data.object;
+      const userId = session.metadata?.userId;
+      const tier = session.metadata?.tier || 'premium';
+      const customerEmail = session.customer_email || session.customer_details?.email;
+      
+      console.log(`🎉 New subscription! User: ${userId}, Tier: ${tier}, Email: ${customerEmail}`);
+      
+      // Update user metadata in Clerk to mark as premium
+      if (userId && CLERK_SECRET_KEY) {
+        try {
+          await updateClerkUserMetadata(userId, { 
+            isPremium: true, 
+            tier: tier,
+            stripeCustomerId: session.customer,
+            subscriptionStart: new Date().toISOString()
+          });
+          console.log(`✅ User ${userId} marked as ${tier}`);
+        } catch (error) {
+          console.error('Failed to update Clerk user:', error);
+        }
+      }
+      
+      // Send Discord notification
+      await sendDiscordNotification({
+        title: '💰 New Premium Subscription!',
+        description: `**Email:** ${customerEmail}\n**Tier:** ${tier}\n**User ID:** ${userId}`
+      }, 'premium');
+      
+      break;
+    }
+    
+    case 'customer.subscription.updated': {
+      const subscription = event.data.object;
+      const status = subscription.status;
+      
+      console.log(`📝 Subscription updated: ${subscription.id}, Status: ${status}`);
+      
+      // If subscription is no longer active, remove premium
+      if (status === 'canceled' || status === 'unpaid' || status === 'past_due') {
+        const customerId = subscription.customer;
+        await handleSubscriptionCancellation(customerId, status);
+      }
+      
+      break;
+    }
+    
+    case 'customer.subscription.deleted': {
+      const subscription = event.data.object;
+      const customerId = subscription.customer;
+      
+      console.log(`❌ Subscription cancelled: ${subscription.id}`);
+      
+      await handleSubscriptionCancellation(customerId, 'cancelled');
+      
+      // Send Discord notification
+      await sendDiscordNotification({
+        title: '😢 Subscription Cancelled',
+        description: `**Customer ID:** ${customerId}\n**Subscription:** ${subscription.id}`
+      }, 'info');
+      
+      break;
+    }
+    
+    case 'invoice.payment_failed': {
+      const invoice = event.data.object;
+      const customerId = invoice.customer;
+      const customerEmail = invoice.customer_email;
+      
+      console.log(`⚠️ Payment failed for customer: ${customerId}`);
+      
+      // Send Discord notification
+      await sendDiscordNotification({
+        title: '⚠️ Payment Failed',
+        description: `**Email:** ${customerEmail}\n**Customer ID:** ${customerId}\n**Amount:** $${(invoice.amount_due / 100).toFixed(2)}`
+      }, 'info');
+      
+      // Note: Don't immediately revoke access - Stripe will retry
+      // After multiple failures, subscription.updated or subscription.deleted will fire
+      
+      break;
+    }
+    
+    case 'charge.refunded': {
+      const charge = event.data.object;
+      const customerId = charge.customer;
+      
+      console.log(`💸 Refund processed for customer: ${customerId}`);
+      
+      // Send Discord notification
+      await sendDiscordNotification({
+        title: '💸 Refund Processed',
+        description: `**Customer ID:** ${customerId}\n**Amount:** $${(charge.amount_refunded / 100).toFixed(2)}`
+      }, 'info');
+      
+      break;
+    }
+    
+    default:
+      console.log(`Unhandled event type: ${event.type}`);
+  }
+  
+  res.json({ received: true });
+});
+
+// Helper function to handle subscription cancellation
+async function handleSubscriptionCancellation(stripeCustomerId, reason) {
+  try {
+    // Find user by Stripe customer ID
+    // We need to search through Clerk users or maintain a mapping
+    // For now, we'll use Stripe to get customer email and log it
+    
+    const customer = await stripe.customers.retrieve(stripeCustomerId);
+    const customerEmail = customer.email;
+    
+    console.log(`🔄 Processing cancellation for: ${customerEmail} (Reason: ${reason})`);
+    
+    // If you have CLERK_SECRET_KEY, you can search for users by email
+    // and update their metadata to remove premium status
+    if (CLERK_SECRET_KEY && customerEmail) {
+      try {
+        // Search for user by email in Clerk
+        const response = await fetch(`https://api.clerk.com/v1/users?email_address=${encodeURIComponent(customerEmail)}`, {
+          headers: {
+            'Authorization': `Bearer ${CLERK_SECRET_KEY}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        const users = await response.json();
+        
+        if (users && users.length > 0) {
+          const userId = users[0].id;
+          await updateClerkUserMetadata(userId, {
+            isPremium: false,
+            tier: 'free',
+            cancellationDate: new Date().toISOString(),
+            cancellationReason: reason
+          });
+          console.log(`✅ User ${userId} (${customerEmail}) downgraded to free`);
+        } else {
+          console.log(`⚠️ Could not find Clerk user for email: ${customerEmail}`);
+        }
+      } catch (clerkError) {
+        console.error('Error updating Clerk user:', clerkError);
+      }
+    }
+    
+  } catch (error) {
+    console.error('Error handling subscription cancellation:', error);
+  }
+}
+
+// Helper function to update Clerk user metadata
+async function updateClerkUserMetadata(userId, metadata) {
+  if (!CLERK_SECRET_KEY) {
+    console.log('⚠️ CLERK_SECRET_KEY not set, skipping metadata update');
+    return;
+  }
+  
+  const response = await fetch(`https://api.clerk.com/v1/users/${userId}/metadata`, {
+    method: 'PATCH',
+    headers: {
+      'Authorization': `Bearer ${CLERK_SECRET_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      public_metadata: metadata
+    })
+  });
+  
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Clerk API error: ${error}`);
+  }
+  
+  return await response.json();
+}
+
 // ============================================
 // RATE LIMITING
 // ============================================
